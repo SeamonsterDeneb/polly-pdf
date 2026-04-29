@@ -34,33 +34,43 @@
 
         /* Cinema Dialog Styles */
         dialog { border: none; border-radius: 16px; padding: 0; width: 95%; max-width: 1200px; max-height: 90vh; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
-        dialog::backdrop { background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); }
+        dialog::backdrop { background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(10px); }
         
         .cinema-header { background: var(--polly-blue); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
         .cinema-header h2 { margin: 0; font-size: 1.3em; }
         .cinema-header button { background: none; border: none; color: white; font-size: 28px; cursor: pointer; line-height: 1; }
         
-        .cinema-body { padding: 30px; overflow-y: auto; display: flex; flex-direction: column; gap: 50px; background: #fff; }
-        .cinema-row { display: grid; grid-template-columns: 1.3fr 1fr; gap: 40px; align-items: start; border-bottom: 1px solid #eee; padding-bottom: 50px; }
+        .cinema-body { padding: 0; overflow-y: auto; background: #fff; }
+        .cinema-row { display: flex; flex-direction: column; gap: 0; border-bottom: 15px solid var(--polly-bg); }
         .cinema-row:last-child { border-bottom: none; }
         
-        .cinema-preview { background: #222; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 400px; box-shadow: inset 0 0 30px rgba(0,0,0,0.5); border: 1px solid #444; }
-        .cinema-preview img { max-width: 100%; max-height: 700px; display: block; object-fit: contain; }
+        .cinema-preview { background: #1a1a1a; padding: 40px; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 50px rgba(0,0,0,0.5); }
+        .cinema-preview img { max-width: 100%; max-height: 75vh; display: block; box-shadow: 0 10px 30px rgba(0,0,0,0.4); border-radius: 4px; }
         
-        .cinema-controls h3 { margin-top: 0; color: var(--polly-blue); font-size: 1.4em; border-bottom: 2px solid #f0f2f5; padding-bottom: 10px; margin-bottom: 20px; }
-        .opt-card { border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px; margin-bottom: 20px; background: #fdfdfd; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
-        .opt-card p.alt-text { margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #111; font-weight: 500; }
-        .opt-card p.explanation { margin: 0 0 15px 0; font-size: 13px; color: #666; font-style: italic; background: #f1f6fb; padding: 10px; border-left: 3px solid var(--polly-blue); border-radius: 0 4px 4px 0; }
+        .cinema-controls { padding: 40px; max-width: 900px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+        .cinema-controls h3 { margin-top: 0; color: var(--polly-blue); font-size: 1.6em; border-bottom: 3px solid var(--polly-bg); padding-bottom: 15px; margin-bottom: 30px; }
         
-        .copy-btn { background: var(--polly-blue); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; width: 100%; transition: 0.2s; }
-        .copy-btn:hover { background: #1a5a8e; }
+        .opt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 800px) { .opt-grid { grid-template-columns: 1fr; } }
+
+        .opt-card { border: 1px solid #e5e5e5; border-radius: 12px; padding: 20px; background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+        .opt-card .tag { font-size: 11px; font-weight: 700; color: #999; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .opt-card .alt-text { margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #111; font-weight: 500; flex-grow: 1; }
+        .opt-card .explanation { margin: 0 0 20px 0; font-size: 13px; color: #555; background: #f8f9fa; padding: 12px; border-left: 4px solid var(--polly-blue); border-radius: 4px; line-height: 1.4; }
+        
+        .copy-btn { background: var(--polly-blue); color: white; border: none; padding: 12px 15px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; width: 100%; transition: 0.2s; }
+        .copy-btn:hover { background: #1a5a8e; transform: translateY(-1px); }
+        .copy-btn:active { transform: translateY(0); }
+
+        /* Hidden textarea for copying */
+        #clipboard-tank { position: fixed; left: -9999px; top: 0; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h1>🦜 Polly Alt: PDF Assistant</h1>
-    <p>A specialized tool for TAs and professors to ensure course PDFs are accessible to all students.</p>
+    <p>Upload a course PDF to identify images and generate cinema-quality accessibility text.</p>
     
     <div class="config-box">
         <label><strong>Gemini API Key:</strong></label>
@@ -77,6 +87,7 @@
 </div>
 
 <dialog id="polly-cinema-dialog"></dialog>
+<textarea id="clipboard-tank" aria-hidden="true"></textarea>
 
 <script>
     const pdfjs = window['pdfjs-dist/build/pdf'];
@@ -87,11 +98,11 @@
     const results = document.getElementById('results');
     const status = document.getElementById('status');
     const cinemaDialog = document.getElementById('polly-cinema-dialog');
+    const clipboardTank = document.getElementById('clipboard-tank');
     
     let currentPdf = null;
     let currentFile = null;
 
-    // --- 1. THE SHIELD: Prevent browser highjacking ---
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {
         document.addEventListener(name, (e) => {
             e.preventDefault();
@@ -109,30 +120,23 @@
     dropZone.onclick = () => fileInput.click();
     fileInput.onchange = (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); };
 
-    // --- 2. FILE HANDLING: Prepare the Preview Gallery ---
     async function handleFile(file) {
         if (!file || file.type !== 'application/pdf') return alert("Please upload a PDF.");
-        
         currentFile = file;
         results.innerHTML = '';
         status.textContent = '🦜 Preparing page previews...';
-        
         try {
             const arrayBuffer = await file.arrayBuffer();
             currentPdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
-
             for (let i = 1; i <= currentPdf.numPages; i++) {
                 status.textContent = `🦜 Rendering Page ${i} of ${currentPdf.numPages}...`;
                 const page = await currentPdf.getPage(i);
-                
                 const viewport = page.getViewport({ scale: 1.5 });
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
-
                 await page.render({ canvasContext: ctx, viewport: viewport }).promise;
-
                 const card = document.createElement('div');
                 card.className = 'image-card';
                 card.innerHTML = `
@@ -151,92 +155,53 @@
         }
     }
 
-    // --- 3. AI BRIDGE: Coordination & Generation ---
     async function triggerGeminiPage(btn, pageNum) {
         const apiKey = document.getElementById('api-key').value;
         if (!apiKey) return alert("🦜 API Key required!");
-
         const card = btn.closest('.image-card');
         const imgEl = card.querySelector('img');
         const originalLabel = btn.textContent;
-        
         btn.textContent = '🦜 Checking permissions...';
         btn.disabled = true;
-
         try {
             const listResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
             const listData = await listResp.json();
             if (listData.error) throw new Error(`API List Error: ${listData.error.message}`);
-
-            // Refined wishlist prioritizing models with vision capabilities
-            const wishlist = [
-                'gemini-2.5-flash-preview-09-2025', 
-                'gemini-2.5-flash-preview', 
-                'gemini-2.5-flash', 
-                'gemini-1.5-flash'
-            ];
-            
+            const wishlist = ['gemini-2.5-flash-preview-09-2025', 'gemini-2.5-flash-preview', 'gemini-2.5-flash', 'gemini-1.5-flash'];
             let selectedModelFull = null;
-
-            // Search for the best match, explicitly EXCLUDING -tts and -embedding models
             for (const target of wishlist) {
-                const found = listData.models.find(m => 
-                    m.name.includes(target) && 
-                    m.supportedGenerationMethods.includes('generateContent') &&
-                    !m.name.includes('-tts') &&
-                    !m.name.includes('-embedding')
-                );
-                if (found) {
-                    selectedModelFull = found.name;
-                    break;
-                }
+                const found = listData.models.find(m => m.name.includes(target) && m.supportedGenerationMethods.includes('generateContent') && !m.name.includes('-tts') && !m.name.includes('-embedding'));
+                if (found) { selectedModelFull = found.name; break; }
             }
-
             if (!selectedModelFull) {
-                // Last ditch effort: find ANY flash model that isn't TTS
-                const fallback = listData.models.find(m => 
-                    m.name.includes('flash') && 
-                    !m.name.includes('-tts')
-                );
+                const fallback = listData.models.find(m => m.name.includes('flash') && !m.name.includes('-tts'));
                 selectedModelFull = fallback ? fallback.name : 'models/gemini-1.5-flash';
             }
-
             console.log(`🦜 Polly chose engine: ${selectedModelFull}`);
-            btn.textContent = '🦜 Polly is squinting...';
-
+            btn.textContent = '🦜 Identifying images...';
             const base64Data = imgEl.src.split(',')[1];
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/${selectedModelFull}:generateContent?key=${apiKey}`;
-
             const prompt = `Act as an accessibility specialist. Identify every significant image, chart, or photo on this PDF page. 
                 For each one, provide:
                 1. "box_2d": the bounding box in [ymin, xmin, ymax, xmax] format (normalized 0-1000).
-                2. "label": a short, descriptive name for the image.
-                3. "options": A list of 2 distinct alt-text variations (~125 chars each) and a brief explanation.
-                Return ONLY a JSON array of objects.`;
-
+                2. "label": a short, descriptive title.
+                3. "options": A list of 2 distinct alt-text variations (~125 chars each).
+                IMPORTANT: In the "options" objects, use the key "alt" for the description text and "explanation" for the strategy.
+                Return ONLY a valid JSON array of objects.`;
             const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{
-                        parts: [
-                            { text: prompt },
-                            { inline_data: { mime_type: "image/jpeg", data: base64Data } }
-                        ]
-                    }],
+                    contents: [{ parts: [ { text: prompt }, { inline_data: { mime_type: "image/jpeg", data: base64Data } } ] }],
                     generationConfig: { responseMimeType: "application/json" }
                 })
             });
-
             const data = await response.json();
             if (data.error) throw new Error(data.error.message);
-
             const aiResults = JSON.parse(data.candidates[0].content.parts[0].text);
             const page = await currentPdf.getPage(pageNum);
             const sanitizedResults = Array.isArray(aiResults) ? aiResults : [aiResults];
-
             showCinemaModal(sanitizedResults, page);
-
         } catch (err) {
             console.error(err);
             alert('🦜 Polly AI Error: ' + err.message);
@@ -246,45 +211,45 @@
         }
     }
 
-    // --- 4. CINEMA VIEW: High-Res Surgical Extraction ---
     async function showCinemaModal(resultsArr, page) {
         cinemaDialog.innerHTML = `
             <div class="cinema-header">
                 <h2>🦜 Polly Cinema: Verify Image Descriptions</h2>
                 <button onclick="this.closest('dialog').close()" aria-label="Close">✕</button>
             </div>
-            <div class="cinema-body" id="cinema-body">
-                <p style="margin-top:0; color:#666;">Polly found ${resultsArr.length} potential images. Verify the descriptions against the cinema-quality previews.</p>
-            </div>
+            <div class="cinema-body" id="cinema-body"></div>
         `;
-
         const body = cinemaDialog.querySelector('#cinema-body');
-
         for (const item of resultsArr) {
             const box = item.box_2d || [0,0,1000,1000];
             const cropCanvas = await getHighResCrop(page, box);
-            const options = Array.isArray(item.options) ? item.options : (item.options ? [item.options] : []);
-
+            const options = Array.isArray(item.options) ? item.options : [];
             const row = document.createElement('div');
             row.className = 'cinema-row';
             row.innerHTML = `
                 <div class="cinema-preview">
-                    <img src="${cropCanvas.toDataURL('image/jpeg', 0.95)}" alt="Cinema view of ${item.label}">
+                    <img src="${cropCanvas.toDataURL('image/jpeg', 0.95)}" alt="Zoomed preview of ${item.label}">
                 </div>
                 <div class="cinema-controls">
                     <h3>🔍 ${item.label || "Detected Image"}</h3>
-                    ${options.map(opt => `
-                        <div class="opt-card">
-                            <p class="alt-text">${opt.alt || "No text generated"}</p>
-                            ${opt.explanation ? `<p class="explanation"><strong>Strategy:</strong> ${opt.explanation}</p>` : ''}
-                            <button class="copy-btn" onclick="copyToClipboard(this, '${(opt.alt || "").replace(/'/g, "\\'")}');">Copy Alt Text</button>
-                        </div>
-                    `).join('')}
+                    <div class="opt-grid">
+                        ${options.map(opt => {
+                            const text = opt.alt || opt.alt_text || opt.text || "No text generated";
+                            const expl = opt.explanation || opt.strategy || opt.why || "";
+                            return `
+                                <div class="opt-card">
+                                    <span class="tag">AI Option</span>
+                                    <p class="alt-text">${text}</p>
+                                    ${expl ? `<p class="explanation"><strong>Strategy:</strong> ${expl}</p>` : ''}
+                                    <button class="copy-btn" data-text="${text.replace(/'/g, "&apos;")}" onclick="copyToClipboard(this)">Copy Alt Text</button>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
                 </div>
             `;
             body.appendChild(row);
         }
-
         cinemaDialog.showModal();
     }
 
@@ -297,25 +262,32 @@
         const x1 = (box[3] / 1000) * viewport.width;
         const w = Math.max(1, x1 - x0);
         const h = Math.max(1, y1 - y0);
-
         const offscreen = document.createElement('canvas');
         offscreen.width = viewport.width;
         offscreen.height = viewport.height;
         await page.render({ canvasContext: offscreen.getContext('2d'), viewport }).promise;
-
         const crop = document.createElement('canvas');
-        crop.width = w;
-        crop.height = h;
+        crop.width = w; crop.height = h;
         crop.getContext('2d').drawImage(offscreen, x0, y0, w, h, 0, 0, w, h);
         return crop;
     }
 
-    function copyToClipboard(btn, text) {
-        if (!text) return;
-        navigator.clipboard.writeText(text);
-        const oldText = btn.textContent;
-        btn.textContent = '✓ Copied to Clipboard!';
-        setTimeout(() => btn.textContent = oldText, 2000);
+    function copyToClipboard(btn) {
+        const text = btn.getAttribute('data-text');
+        if (!text || text === "No text generated") return;
+        
+        clipboardTank.value = text;
+        clipboardTank.select();
+        clipboardTank.setSelectionRange(0, 99999); // For mobile
+        
+        try {
+            document.execCommand('copy');
+            const oldText = btn.textContent;
+            btn.textContent = '✓ Copied!';
+            setTimeout(() => btn.textContent = oldText, 2000);
+        } catch (err) {
+            console.error('Copy failed', err);
+        }
     }
 </script>
 </body>
