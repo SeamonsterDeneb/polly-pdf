@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Polly Alt for PDF (Phase 2.4)</title>
+    <title>Polly Alt for PDF (Phase 2.5)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <style>
         :root {
             --polly-blue: #2271b1;
             --polly-bg: #f0f2f5;
             --polly-dark: #1e1e1e;
+            --polly-red: #d63638;
         }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--polly-bg); padding: 40px; color: #333; margin: 0; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 25px rgba(0,0,0,0.1); }
@@ -32,7 +33,6 @@
         .gen-btn:hover { background: #1a5a8e; }
         .gen-btn:disabled { background: #ccc; cursor: not-allowed; }
 
-        /* Spinner */
         .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; margin-right: 8px; vertical-align: middle; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -49,7 +49,7 @@
         .cinema-row:last-child { border-bottom: none; }
         
         .cinema-preview { background: #1a1a1a; padding: 40px; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 50px rgba(0,0,0,0.5); }
-        .cinema-preview img { max-width: 100%; max-height: 75vh; display: block; box-shadow: 0 10px 30px rgba(0,0,0,0.4); border-radius: 4px; }
+        .cinema-preview img { width: 100%; max-width: 100%; max-height: 75vh; display: block; box-shadow: 0 10px 30px rgba(0,0,0,0.4); border-radius: 4px; object-fit: contain; }
         
         .cinema-controls { padding: 40px; max-width: 900px; margin: 0 auto; width: 100%; box-sizing: border-box; }
         .cinema-controls h3 { margin-top: 0; color: var(--polly-blue); font-size: 1.6em; border-bottom: 3px solid var(--polly-bg); padding-bottom: 15px; margin-bottom: 30px; }
@@ -57,15 +57,19 @@
         .opt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         @media (max-width: 800px) { .opt-grid { grid-template-columns: 1fr; } }
 
-        .opt-card { border: 1px solid #e5e5e5; border-radius: 12px; padding: 20px; background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
-        .opt-card .tag { font-size: 11px; font-weight: 700; color: #999; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .opt-card { border: 1px solid #e5e5e5; border-radius: 12px; padding: 20px; background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; position: relative; }
+        .opt-card .tag-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .opt-card .tag { font-size: 11px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .char-counter { font-size: 11px; color: #666; font-weight: 600; }
+        .char-counter.over-limit { color: var(--polly-red); }
+
         .opt-card .alt-text { margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #111; font-weight: 500; flex-grow: 1; min-height: 40px; }
         .opt-card .explanation { margin: 0 0 20px 0; font-size: 13px; color: #555; background: #f8f9fa; padding: 12px; border-left: 4px solid var(--polly-blue); border-radius: 4px; line-height: 1.4; }
         
         .copy-btn { background: var(--polly-blue); color: white; border: none; padding: 12px 15px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; width: 100%; transition: 0.2s; }
         .copy-btn:hover { background: #1a5a8e; }
 
-        /* Hidden textarea for copying */
         #clipboard-tank { position: fixed; left: -9999px; top: 0; }
     </style>
 </head>
@@ -73,7 +77,7 @@
 
 <div class="container">
     <h1>🦜 Polly Alt: PDF Assistant</h1>
-    <p>Upload a course PDF to identify images and generate cinema-quality accessibility text.</p>
+    <p>A specialized vision tool for academic accessibility. Upload a PDF, identify images, and generate vetted alternative text.</p>
     
     <div class="config-box">
         <label><strong>Gemini API Key:</strong></label>
@@ -106,7 +110,6 @@
     let currentPdf = null;
     let currentFile = null;
 
-    // Prevent default browser behavior
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {
         document.addEventListener(name, (e) => {
             e.preventDefault();
@@ -159,9 +162,6 @@
         }
     }
 
-    /**
-     * Detection Step: Only find the images on the page
-     */
     async function triggerDetection(btn, pageNum) {
         const apiKey = document.getElementById('api-key').value;
         if (!apiKey) return alert("🦜 API Key required!");
@@ -178,12 +178,11 @@
             const base64Data = imgEl.src.split(',')[1];
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`;
 
-            // Faster prompt: Just find the boxes and labels
             const prompt = `Identify every significant image, chart, or photo on this PDF page. 
                 Return ONLY a JSON array of objects. 
                 Each object must have:
                 1. "box_2d": the bounding box in [ymin, xmin, ymax, xmax] format (normalized 0-1000).
-                2. "label": a short, descriptive name for what the image is (e.g., "Bar Chart of Enrollment").`;
+                2. "label": a short, descriptive name for what the image is.`;
 
             const response = await fetch(apiUrl, {
                 method: 'POST',
@@ -211,9 +210,6 @@
         }
     }
 
-    /**
-     * Individual Alt Generation: Called per image inside the modal
-     */
     async function generateAltForImage(btn, base64Image) {
         const apiKey = document.getElementById('api-key').value;
         const container = btn.closest('.cinema-controls');
@@ -227,7 +223,8 @@
             const model = await getBestModel(apiKey);
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`;
 
-            const prompt = `Act as an accessibility specialist. Write 2 distinct alt-text variations (~125 chars each) for this specific image.
+            const prompt = `Act as an accessibility specialist. Write exactly 2 distinct alt-text variations for this specific image. 
+                CRITICAL REQUIREMENT: Each description MUST be 125 characters or less. 
                 Explain the strategy for each.
                 Return ONLY a valid JSON array of two objects.
                 Format: [ {"alt": "...", "explanation": "..."}, {"alt": "...", "explanation": "..."} ]`;
@@ -246,17 +243,23 @@
 
             const options = JSON.parse(data.candidates[0].content.parts[0].text);
             
-            // Render the options into the grid
-            optGrid.innerHTML = options.map(opt => `
-                <div class="opt-card">
-                    <span class="tag">AI Option</span>
-                    <p class="alt-text">${opt.alt}</p>
-                    <p class="explanation"><strong>Strategy:</strong> ${opt.explanation}</p>
-                    <button class="copy-btn" data-text="${opt.alt.replace(/'/g, "&apos;")}" onclick="copyToClipboard(this)">Copy Alt Text</button>
-                </div>
-            `).join('');
+            optGrid.innerHTML = options.map(opt => {
+                const charLen = (opt.alt || '').length;
+                const isOver = charLen > 125;
+                return `
+                    <div class="opt-card">
+                        <div class="tag-row">
+                            <span class="tag">AI Option</span>
+                            <span class="char-counter ${isOver ? 'over-limit' : ''}">${charLen} characters</span>
+                        </div>
+                        <p class="alt-text">${opt.alt}</p>
+                        <p class="explanation"><strong>Strategy:</strong> ${opt.explanation}</p>
+                        <button class="copy-btn" data-text="${opt.alt.replace(/'/g, "&apos;")}" onclick="copyToClipboard(this)">Copy Alt Text</button>
+                    </div>
+                `;
+            }).join('');
             
-            btn.style.display = 'none'; // Hide generate button after success
+            btn.style.display = 'none'; 
         } catch (err) {
             console.error(err);
             alert('Error generating alt text: ' + err.message);
@@ -288,11 +291,11 @@
             row.className = 'cinema-row';
             row.innerHTML = `
                 <div class="cinema-preview">
-                    <img src="${cropBase64}" alt="Zoomed preview of ${item.label}">
+                    <img src="${cropBase64}" alt="Cinema scale view of ${item.label}">
                 </div>
                 <div class="cinema-controls">
                     <h3>🔍 ${item.label || "Detected Image"}</h3>
-                    <p style="color:#666; margin-bottom:20px;">Would you like Polly to generate accessibility text for this image?</p>
+                    <p style="color:#666; margin-bottom:20px;">Generate descriptions for this image. Aiming for under 125 characters.</p>
                     <button class="gen-btn" onclick="generateAltForImage(this, '${cropBase64.split(',')[1]}')">
                         Generate Alt Text Options
                     </button>
@@ -317,6 +320,7 @@
     }
 
     async function getHighResCrop(page, box) {
+        // High fidelity scaling
         const scale = 4.0;
         const viewport = page.getViewport({ scale });
         const y0 = (box[0] / 1000) * viewport.height;
