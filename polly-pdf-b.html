@@ -64,10 +64,19 @@
         .char-counter { font-size: 11px; color: #666; font-weight: 600; }
         .char-counter.over-limit { color: var(--polly-red); }
 
-        .opt-card .alt-text { margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #111; font-weight: 500; flex-grow: 1; min-height: 40px; }
-        .opt-card .explanation { margin: 0 0 20px 0; font-size: 13px; color: #555; background: #f8f9fa; padding: 12px; border-left: 4px solid var(--polly-blue); border-radius: 4px; line-height: 1.4; }
+        .alt-text-area { margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #111; font-weight: 500; min-height: 60px; border: 1px solid transparent; width: 100%; }
+        .alt-text-area.editing { border: 1px solid #ccc; border-radius: 4px; padding: 8px; font-family: inherit; resize: vertical; background: #fff; }
         
-        .copy-btn { background: var(--polly-blue); color: white; border: none; padding: 12px 15px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; width: 100%; transition: 0.2s; }
+        .explanation { margin: 0 0 20px 0; font-size: 13px; color: #555; background: #f8f9fa; padding: 12px; border-left: 4px solid var(--polly-blue); border-radius: 4px; line-height: 1.4; }
+        
+        .btn-row { display: flex; gap: 10px; }
+        .btn-row button { flex: 1; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: 0.2s; }
+        
+        .edit-btn { background: #f0f0f0; color: #333; border: 1px solid #ccc !important; }
+        .edit-btn:hover { background: #e0e0e0; }
+        .edit-btn.active { background: #333; color: white; border-color: #333 !important; }
+
+        .copy-btn { background: var(--polly-blue); color: white; }
         .copy-btn:hover { background: #1a5a8e; }
 
         #clipboard-tank { position: fixed; left: -9999px; top: 0; }
@@ -252,9 +261,14 @@
                             <span class="tag">AI Option</span>
                             <span class="char-counter ${isOver ? 'over-limit' : ''}">${charLen} characters</span>
                         </div>
-                        <p class="alt-text">${opt.alt}</p>
+                        <div class="alt-text-container">
+                            <p class="alt-text-area">${opt.alt}</p>
+                        </div>
                         <p class="explanation"><strong>Strategy:</strong> ${opt.explanation}</p>
-                        <button class="copy-btn" data-text="${opt.alt.replace(/'/g, "&apos;")}" onclick="copyToClipboard(this)">Copy Alt Text</button>
+                        <div class="btn-row">
+                            <button class="edit-btn" onclick="toggleEdit(this)">Edit</button>
+                            <button class="copy-btn" onclick="copyToClipboard(this)">Copy Alt Text</button>
+                        </div>
                     </div>
                 `;
             }).join('');
@@ -265,6 +279,45 @@
             alert('Error generating alt text: ' + err.message);
             btn.innerHTML = originalBtnHtml;
             btn.disabled = false;
+        }
+    }
+
+    function toggleEdit(btn) {
+        const card = btn.closest('.opt-card');
+        const container = card.querySelector('.alt-text-container');
+        const counter = card.querySelector('.char-counter');
+        const isEditing = btn.classList.contains('active');
+
+        if (!isEditing) {
+            // Switch to edit mode
+            const text = container.querySelector('.alt-text-area').textContent;
+            const textarea = document.createElement('textarea');
+            textarea.className = 'alt-text-area editing';
+            textarea.value = text;
+            container.innerHTML = '';
+            container.appendChild(textarea);
+            
+            btn.textContent = 'Apply';
+            btn.classList.add('active');
+            
+            textarea.addEventListener('input', () => {
+                const len = textarea.value.length;
+                counter.textContent = `${len} characters`;
+                counter.classList.toggle('over-limit', len > 125);
+            });
+            textarea.focus();
+        } else {
+            // Switch back to view mode
+            const textarea = container.querySelector('textarea');
+            const newText = textarea.value;
+            const p = document.createElement('p');
+            p.className = 'alt-text-area';
+            p.textContent = newText;
+            container.innerHTML = '';
+            container.appendChild(p);
+            
+            btn.textContent = 'Edit';
+            btn.classList.remove('active');
         }
     }
 
@@ -320,7 +373,6 @@
     }
 
     async function getHighResCrop(page, box) {
-        // High fidelity scaling
         const scale = 4.0;
         const viewport = page.getViewport({ scale });
         const y0 = (box[0] / 1000) * viewport.height;
@@ -340,7 +392,14 @@
     }
 
     function copyToClipboard(btn) {
-        const text = btn.getAttribute('data-text');
+        const card = btn.closest('.opt-card');
+        const contentArea = card.querySelector('.alt-text-area');
+        
+        // If we're currently editing, grab from the textarea. Otherwise, from the p tag.
+        const text = contentArea.tagName === 'TEXTAREA' ? contentArea.value : contentArea.textContent;
+        
+        if (!text) return;
+
         clipboardTank.value = text;
         clipboardTank.select();
         clipboardTank.setSelectionRange(0, 99999);
