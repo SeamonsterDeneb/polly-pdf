@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Polly Alt for PDF (Phase 2.3)</title>
+    <title>Polly Alt for PDF (Phase 2.4)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <style>
         :root {
@@ -28,9 +28,13 @@
         .image-card img { width: 100%; height: auto; max-height: 400px; object-fit: contain; background: #f0f0f0; border-bottom: 1px solid #eee; }
         .card-content { padding: 20px; text-align: center; }
         
-        .gen-btn { background: var(--polly-blue); color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%; transition: background 0.2s; }
+        .gen-btn { background: var(--polly-blue); color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%; transition: background 0.2s; position: relative; }
         .gen-btn:hover { background: #1a5a8e; }
         .gen-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* Spinner */
+        .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; margin-right: 8px; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         /* Cinema Dialog Styles */
         dialog { border: none; border-radius: 16px; padding: 0; width: 95%; max-width: 1200px; max-height: 90vh; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
@@ -55,12 +59,11 @@
 
         .opt-card { border: 1px solid #e5e5e5; border-radius: 12px; padding: 20px; background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
         .opt-card .tag { font-size: 11px; font-weight: 700; color: #999; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .opt-card .alt-text { margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #111; font-weight: 500; flex-grow: 1; }
+        .opt-card .alt-text { margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #111; font-weight: 500; flex-grow: 1; min-height: 40px; }
         .opt-card .explanation { margin: 0 0 20px 0; font-size: 13px; color: #555; background: #f8f9fa; padding: 12px; border-left: 4px solid var(--polly-blue); border-radius: 4px; line-height: 1.4; }
         
         .copy-btn { background: var(--polly-blue); color: white; border: none; padding: 12px 15px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; width: 100%; transition: 0.2s; }
-        .copy-btn:hover { background: #1a5a8e; transform: translateY(-1px); }
-        .copy-btn:active { transform: translateY(0); }
+        .copy-btn:hover { background: #1a5a8e; }
 
         /* Hidden textarea for copying */
         #clipboard-tank { position: fixed; left: -9999px; top: 0; }
@@ -103,6 +106,7 @@
     let currentPdf = null;
     let currentFile = null;
 
+    // Prevent default browser behavior
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {
         document.addEventListener(name, (e) => {
             e.preventDefault();
@@ -143,7 +147,7 @@
                     <img src="${canvas.toDataURL('image/jpeg', 0.8)}" alt="Page ${i} Preview">
                     <div class="card-content">
                         <h3>Page ${i}</h3>
-                        <button class="gen-btn" onclick="triggerGeminiPage(this, ${i})">Describe Images on this Page</button>
+                        <button class="gen-btn" onclick="triggerDetection(this, ${i})">Scan Page for Images</button>
                     </div>
                 `;
                 results.appendChild(card);
@@ -155,39 +159,32 @@
         }
     }
 
-    async function triggerGeminiPage(btn, pageNum) {
+    /**
+     * Detection Step: Only find the images on the page
+     */
+    async function triggerDetection(btn, pageNum) {
         const apiKey = document.getElementById('api-key').value;
         if (!apiKey) return alert("🦜 API Key required!");
+        
         const card = btn.closest('.image-card');
         const imgEl = card.querySelector('img');
         const originalLabel = btn.textContent;
-        btn.textContent = '🦜 Checking permissions...';
+        
+        btn.innerHTML = '<span class="spinner"></span>Identifying images...';
         btn.disabled = true;
+
         try {
-            const listResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-            const listData = await listResp.json();
-            if (listData.error) throw new Error(`API List Error: ${listData.error.message}`);
-            const wishlist = ['gemini-2.5-flash-preview-09-2025', 'gemini-2.5-flash-preview', 'gemini-2.5-flash', 'gemini-1.5-flash'];
-            let selectedModelFull = null;
-            for (const target of wishlist) {
-                const found = listData.models.find(m => m.name.includes(target) && m.supportedGenerationMethods.includes('generateContent') && !m.name.includes('-tts') && !m.name.includes('-embedding'));
-                if (found) { selectedModelFull = found.name; break; }
-            }
-            if (!selectedModelFull) {
-                const fallback = listData.models.find(m => m.name.includes('flash') && !m.name.includes('-tts'));
-                selectedModelFull = fallback ? fallback.name : 'models/gemini-1.5-flash';
-            }
-            console.log(`🦜 Polly chose engine: ${selectedModelFull}`);
-            btn.textContent = '🦜 Identifying images...';
+            const model = await getBestModel(apiKey);
             const base64Data = imgEl.src.split(',')[1];
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/${selectedModelFull}:generateContent?key=${apiKey}`;
-            const prompt = `Act as an accessibility specialist. Identify every significant image, chart, or photo on this PDF page. 
-                For each one, provide:
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`;
+
+            // Faster prompt: Just find the boxes and labels
+            const prompt = `Identify every significant image, chart, or photo on this PDF page. 
+                Return ONLY a JSON array of objects. 
+                Each object must have:
                 1. "box_2d": the bounding box in [ymin, xmin, ymax, xmax] format (normalized 0-1000).
-                2. "label": a short, descriptive title.
-                3. "options": A list of 2 distinct alt-text variations (~125 chars each).
-                IMPORTANT: In the "options" objects, use the key "alt" for the description text and "explanation" for the strategy.
-                Return ONLY a valid JSON array of objects.`;
+                2. "label": a short, descriptive name for what the image is (e.g., "Bar Chart of Enrollment").`;
+
             const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -196,11 +193,14 @@
                     generationConfig: { responseMimeType: "application/json" }
                 })
             });
+
             const data = await response.json();
             if (data.error) throw new Error(data.error.message);
+
             const aiResults = JSON.parse(data.candidates[0].content.parts[0].text);
             const page = await currentPdf.getPage(pageNum);
             const sanitizedResults = Array.isArray(aiResults) ? aiResults : [aiResults];
+
             showCinemaModal(sanitizedResults, page);
         } catch (err) {
             console.error(err);
@@ -211,46 +211,109 @@
         }
     }
 
+    /**
+     * Individual Alt Generation: Called per image inside the modal
+     */
+    async function generateAltForImage(btn, base64Image) {
+        const apiKey = document.getElementById('api-key').value;
+        const container = btn.closest('.cinema-controls');
+        const optGrid = container.querySelector('.opt-grid');
+        const originalBtnHtml = btn.innerHTML;
+
+        btn.innerHTML = '<span class="spinner"></span>Polly is thinking...';
+        btn.disabled = true;
+
+        try {
+            const model = await getBestModel(apiKey);
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`;
+
+            const prompt = `Act as an accessibility specialist. Write 2 distinct alt-text variations (~125 chars each) for this specific image.
+                Explain the strategy for each.
+                Return ONLY a valid JSON array of two objects.
+                Format: [ {"alt": "...", "explanation": "..."}, {"alt": "...", "explanation": "..."} ]`;
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [ { text: prompt }, { inline_data: { mime_type: "image/jpeg", data: base64Image } } ] }],
+                    generationConfig: { responseMimeType: "application/json" }
+                })
+            });
+
+            const data = await response.json();
+            if (data.error) throw new Error(data.error.message);
+
+            const options = JSON.parse(data.candidates[0].content.parts[0].text);
+            
+            // Render the options into the grid
+            optGrid.innerHTML = options.map(opt => `
+                <div class="opt-card">
+                    <span class="tag">AI Option</span>
+                    <p class="alt-text">${opt.alt}</p>
+                    <p class="explanation"><strong>Strategy:</strong> ${opt.explanation}</p>
+                    <button class="copy-btn" data-text="${opt.alt.replace(/'/g, "&apos;")}" onclick="copyToClipboard(this)">Copy Alt Text</button>
+                </div>
+            `).join('');
+            
+            btn.style.display = 'none'; // Hide generate button after success
+        } catch (err) {
+            console.error(err);
+            alert('Error generating alt text: ' + err.message);
+            btn.innerHTML = originalBtnHtml;
+            btn.disabled = false;
+        }
+    }
+
     async function showCinemaModal(resultsArr, page) {
         cinemaDialog.innerHTML = `
             <div class="cinema-header">
-                <h2>🦜 Polly Cinema: Verify Image Descriptions</h2>
+                <h2>🦜 Polly Cinema: Review Images</h2>
                 <button onclick="this.closest('dialog').close()" aria-label="Close">✕</button>
             </div>
             <div class="cinema-body" id="cinema-body"></div>
         `;
         const body = cinemaDialog.querySelector('#cinema-body');
+
+        if (resultsArr.length === 0) {
+            body.innerHTML = '<div style="padding:40px; text-align:center;">Polly didn\'t see any images on this page.</div>';
+        }
+
         for (const item of resultsArr) {
             const box = item.box_2d || [0,0,1000,1000];
             const cropCanvas = await getHighResCrop(page, box);
-            const options = Array.isArray(item.options) ? item.options : [];
+            const cropBase64 = cropCanvas.toDataURL('image/jpeg', 0.9);
+            
             const row = document.createElement('div');
             row.className = 'cinema-row';
             row.innerHTML = `
                 <div class="cinema-preview">
-                    <img src="${cropCanvas.toDataURL('image/jpeg', 0.95)}" alt="Zoomed preview of ${item.label}">
+                    <img src="${cropBase64}" alt="Zoomed preview of ${item.label}">
                 </div>
                 <div class="cinema-controls">
                     <h3>🔍 ${item.label || "Detected Image"}</h3>
-                    <div class="opt-grid">
-                        ${options.map(opt => {
-                            const text = opt.alt || opt.alt_text || opt.text || "No text generated";
-                            const expl = opt.explanation || opt.strategy || opt.why || "";
-                            return `
-                                <div class="opt-card">
-                                    <span class="tag">AI Option</span>
-                                    <p class="alt-text">${text}</p>
-                                    ${expl ? `<p class="explanation"><strong>Strategy:</strong> ${expl}</p>` : ''}
-                                    <button class="copy-btn" data-text="${text.replace(/'/g, "&apos;")}" onclick="copyToClipboard(this)">Copy Alt Text</button>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
+                    <p style="color:#666; margin-bottom:20px;">Would you like Polly to generate accessibility text for this image?</p>
+                    <button class="gen-btn" onclick="generateAltForImage(this, '${cropBase64.split(',')[1]}')">
+                        Generate Alt Text Options
+                    </button>
+                    <div class="opt-grid" style="margin-top:20px;"></div>
                 </div>
             `;
             body.appendChild(row);
         }
         cinemaDialog.showModal();
+    }
+
+    async function getBestModel(apiKey) {
+        const listResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        const listData = await listResp.json();
+        const wishlist = ['gemini-2.5-flash-preview-09-2025', 'gemini-2.5-flash-preview', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+        let selected = null;
+        for (const target of wishlist) {
+            const found = listData.models.find(m => m.name.includes(target) && m.supportedGenerationMethods.includes('generateContent') && !m.name.includes('-tts'));
+            if (found) { selected = found.name; break; }
+        }
+        return selected || 'models/gemini-1.5-flash';
     }
 
     async function getHighResCrop(page, box) {
@@ -274,20 +337,15 @@
 
     function copyToClipboard(btn) {
         const text = btn.getAttribute('data-text');
-        if (!text || text === "No text generated") return;
-        
         clipboardTank.value = text;
         clipboardTank.select();
-        clipboardTank.setSelectionRange(0, 99999); // For mobile
-        
+        clipboardTank.setSelectionRange(0, 99999);
         try {
             document.execCommand('copy');
             const oldText = btn.textContent;
             btn.textContent = '✓ Copied!';
             setTimeout(() => btn.textContent = oldText, 2000);
-        } catch (err) {
-            console.error('Copy failed', err);
-        }
+        } catch (err) { console.error('Copy failed', err); }
     }
 </script>
 </body>
