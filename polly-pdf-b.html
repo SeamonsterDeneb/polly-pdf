@@ -3,45 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Polly Alt for PDF (Phase 1.1)</title>
+    <title>Polly Alt for PDF (Phase 2.3)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <style>
-        :root { --polly-blue: #2271b1; --polly-bg: #f0f2f5; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--polly-bg); padding: 40px; color: #333; }
-        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        h1 { color: var(--polly-blue); margin-top: 0; }
-        .config-box { background: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 20px; }
-        input[type="text"] { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        :root {
+            --polly-blue: #2271b1;
+            --polly-bg: #f0f2f5;
+            --polly-dark: #1e1e1e;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--polly-bg); padding: 40px; color: #333; margin: 0; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 25px rgba(0,0,0,0.1); }
+        h1 { color: var(--polly-blue); margin-top: 0; display: flex; align-items: center; gap: 10px; }
         
-        #drop-zone { border: 2px dashed var(--polly-blue); padding: 40px; text-align: center; cursor: pointer; transition: 0.3s; margin-bottom: 20px; border-radius: 8px; background: #fff; }
-        #drop-zone.dragover { background: #e7f3ff; border-style: solid; }
+        .config-box { background: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 25px; }
+        input[type="text"] { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
         
-        #results { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; margin-top: 30px; }
-        .image-card { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: #fff; display: flex; flex-direction: column; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .image-card img { width: 100%; height: 180px; object-fit: contain; background: #f0f0f0; border-bottom: 1px solid #eee; }
-        .card-content { padding: 12px; text-align: center; }
-        .gen-btn { background: var(--polly-blue); color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: 600; width: 100%; }
-        #status { font-style: italic; color: #666; margin-bottom: 10px; }
+        #drop-zone { border: 3px dashed var(--polly-blue); padding: 60px 20px; text-align: center; cursor: pointer; transition: 0.3s; margin-bottom: 30px; border-radius: 12px; background: #fff; }
+        #drop-zone.dragover { background: #e7f3ff; border-style: solid; box-shadow: inset 0 0 10px rgba(34, 113, 177, 0.2); }
+        
+        #status { font-style: italic; color: #666; margin-bottom: 20px; min-height: 20px; }
+        #results { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; }
+        
+        .image-card { border: 1px solid #ddd; border-radius: 10px; overflow: hidden; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+        .image-card img { width: 100%; height: auto; max-height: 400px; object-fit: contain; background: #f0f0f0; border-bottom: 1px solid #eee; }
+        .card-content { padding: 20px; text-align: center; }
+        
+        .gen-btn { background: var(--polly-blue); color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%; transition: background 0.2s; }
+        .gen-btn:hover { background: #1a5a8e; }
+        .gen-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* Cinema Dialog Styles */
+        dialog { border: none; border-radius: 16px; padding: 0; width: 95%; max-width: 1200px; max-height: 90vh; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+        dialog::backdrop { background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); }
+        
+        .cinema-header { background: var(--polly-blue); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
+        .cinema-header h2 { margin: 0; font-size: 1.3em; }
+        .cinema-header button { background: none; border: none; color: white; font-size: 28px; cursor: pointer; line-height: 1; }
+        
+        .cinema-body { padding: 30px; overflow-y: auto; display: flex; flex-direction: column; gap: 50px; background: #fff; }
+        .cinema-row { display: grid; grid-template-columns: 1.3fr 1fr; gap: 40px; align-items: start; border-bottom: 1px solid #eee; padding-bottom: 50px; }
+        .cinema-row:last-child { border-bottom: none; }
+        
+        .cinema-preview { background: #222; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 400px; box-shadow: inset 0 0 30px rgba(0,0,0,0.5); border: 1px solid #444; }
+        .cinema-preview img { max-width: 100%; max-height: 700px; display: block; object-fit: contain; }
+        
+        .cinema-controls h3 { margin-top: 0; color: var(--polly-blue); font-size: 1.4em; border-bottom: 2px solid #f0f2f5; padding-bottom: 10px; margin-bottom: 20px; }
+        .opt-card { border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px; margin-bottom: 20px; background: #fdfdfd; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
+        .opt-card p.alt-text { margin: 0 0 15px 0; line-height: 1.6; font-size: 16px; color: #111; font-weight: 500; }
+        .opt-card p.explanation { margin: 0 0 15px 0; font-size: 13px; color: #666; font-style: italic; background: #f1f6fb; padding: 10px; border-left: 3px solid var(--polly-blue); border-radius: 0 4px 4px 0; }
+        
+        .copy-btn { background: var(--polly-blue); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; width: 100%; transition: 0.2s; }
+        .copy-btn:hover { background: #1a5a8e; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🦜 Polly Alt: PDF Edition</h1>
+    <h1>🦜 Polly Alt: PDF Assistant</h1>
+    <p>A specialized tool for TAs and professors to ensure course PDFs are accessible to all students.</p>
     
     <div class="config-box">
         <label><strong>Gemini API Key:</strong></label>
-        <input type="text" id="api-key" placeholder="Paste your API key here...">
+        <input type="text" id="api-key" placeholder="Enter your Google AI Studio key here...">
     </div>
 
     <div id="drop-zone">
-        <p><strong>Drag & Drop PDF here</strong> or click to browse</p>
+        <p><strong>Drag & Drop your PDF here</strong> or click to browse</p>
         <input type="file" id="file-input" accept="application/pdf" style="display: none;">
     </div>
 
     <div id="status"></div>
     <div id="results"></div>
 </div>
+
+<dialog id="polly-cinema-dialog"></dialog>
 
 <script>
     const pdfjs = window['pdfjs-dist/build/pdf'];
@@ -51,33 +86,46 @@
     const fileInput = document.getElementById('file-input');
     const results = document.getElementById('results');
     const status = document.getElementById('status');
+    const cinemaDialog = document.getElementById('polly-cinema-dialog');
+    
+    let currentPdf = null;
+    let currentFile = null;
 
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(n => {
-        dropZone.addEventListener(n, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
+    // --- 1. THE SHIELD: Prevent browser highjacking ---
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {
+        document.addEventListener(name, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        }, false);
+    });
+
+    dropZone.addEventListener('dragover', () => dropZone.classList.add('dragover'));
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
     });
 
     dropZone.onclick = () => fileInput.click();
-    fileInput.onchange = (e) => handleFile(e.target.files[0]);
-    dropZone.addEventListener('drop', (e) => {
-        const file = e.dataTransfer.files[0];
-        if (file) handleFile(file);
-    });
+    fileInput.onchange = (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); };
 
+    // --- 2. FILE HANDLING: Prepare the Preview Gallery ---
     async function handleFile(file) {
-        if (!file || file.type !== 'application/pdf') return;
+        if (!file || file.type !== 'application/pdf') return alert("Please upload a PDF.");
+        
+        currentFile = file;
         results.innerHTML = '';
         status.textContent = '🦜 Preparing page previews...';
         
         try {
             const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+            currentPdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
 
-            for (let i = 1; i <= pdf.numPages; i++) {
-                status.textContent = `🦜 Rendering Page ${i} of ${pdf.numPages}...`;
-                const page = await pdf.getPage(i);
+            for (let i = 1; i <= currentPdf.numPages; i++) {
+                status.textContent = `🦜 Rendering Page ${i} of ${currentPdf.numPages}...`;
+                const page = await currentPdf.getPage(i);
                 
-                // Render page at a high enough resolution for Gemini to "read" it
-                const viewport = page.getViewport({ scale: 2.0 });
+                const viewport = page.getViewport({ scale: 1.5 });
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 canvas.width = viewport.width;
@@ -87,9 +135,8 @@
 
                 const card = document.createElement('div');
                 card.className = 'image-card';
-                card.style.width = '100%'; 
                 card.innerHTML = `
-                    <img src="${canvas.toDataURL('image/jpeg', 0.8)}" style="height: auto; max-height: 500px;">
+                    <img src="${canvas.toDataURL('image/jpeg', 0.8)}" alt="Page ${i} Preview">
                     <div class="card-content">
                         <h3>Page ${i}</h3>
                         <button class="gen-btn" onclick="triggerGeminiPage(this, ${i})">Describe Images on this Page</button>
@@ -100,16 +147,14 @@
             status.textContent = `Ready! Choose a page for Polly to analyze.`;
         } catch (err) {
             console.error(err);
-            status.textContent = "Error: Captain, the pages wouldn't turn.";
+            status.textContent = "Error: Polly couldn't read this PDF.";
         }
     }
 
+    // --- 3. AI BRIDGE: Coordination & Generation ---
     async function triggerGeminiPage(btn, pageNum) {
         const apiKey = document.getElementById('api-key').value;
-        if (!apiKey) {
-            alert("🦜 Please enter your Gemini API Key first!");
-            return;
-        }
+        if (!apiKey) return alert("🦜 API Key required!");
 
         const card = btn.closest('.image-card');
         const imgEl = card.querySelector('img');
@@ -119,48 +164,55 @@
         btn.disabled = true;
 
         try {
-            // 1. AUTODISCOVERY: Fetch allowed models for this API key
-            const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-            const listResp = await fetch(listUrl);
+            const listResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
             const listData = await listResp.json();
+            if (listData.error) throw new Error(`API List Error: ${listData.error.message}`);
 
-            if (listData.error) throw new Error(`API Key Error: ${listData.error.message}`);
+            // Refined wishlist prioritizing models with vision capabilities
+            const wishlist = [
+                'gemini-2.5-flash-preview-09-2025', 
+                'gemini-2.5-flash-preview', 
+                'gemini-2.5-flash', 
+                'gemini-1.5-flash'
+            ];
+            
+            let selectedModelFull = null;
 
-            // Define our "wishlist" in order of preference
-            const wishlist = ['gemini-3-flash-preview', 'gemini-3-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
-            let selectedModel = '';
-
-            // Find the first model in our wishlist that the user actually has access to
-            for (const preferred of wishlist) {
-                if (listData.models.some(m => m.name.includes(preferred) && m.supportedGenerationMethods.includes('generateContent'))) {
-                    selectedModel = preferred;
+            // Search for the best match, explicitly EXCLUDING -tts and -embedding models
+            for (const target of wishlist) {
+                const found = listData.models.find(m => 
+                    m.name.includes(target) && 
+                    m.supportedGenerationMethods.includes('generateContent') &&
+                    !m.name.includes('-tts') &&
+                    !m.name.includes('-embedding')
+                );
+                if (found) {
+                    selectedModelFull = found.name;
                     break;
                 }
             }
 
-            // Final fallback: Use the first available Flash model if none of our favorites are found
-            if (!selectedModel) {
-                const anyFlash = listData.models.find(m => m.name.includes('flash'));
-                if (anyFlash) {
-                    selectedModel = anyFlash.name.split('/').pop();
-                } else {
-                    throw new Error("No compatible Gemini Flash models found on this account.");
-                }
+            if (!selectedModelFull) {
+                // Last ditch effort: find ANY flash model that isn't TTS
+                const fallback = listData.models.find(m => 
+                    m.name.includes('flash') && 
+                    !m.name.includes('-tts')
+                );
+                selectedModelFull = fallback ? fallback.name : 'models/gemini-1.5-flash';
             }
 
-            console.log(`🦜 Polly chose: ${selectedModel}`);
+            console.log(`🦜 Polly chose engine: ${selectedModelFull}`);
             btn.textContent = '🦜 Polly is squinting...';
 
-            // 2. THE ACTUAL GENERATION
             const base64Data = imgEl.src.split(',')[1];
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`;
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/${selectedModelFull}:generateContent?key=${apiKey}`;
 
-            const prompt = `Identify every significant image, chart, or photo on this PDF page. 
-                For each one, provide 2 distinct alt-text variations (~125 chars each) and a brief explanation.
-                Return the data ONLY as a valid JSON array of objects. 
-                Each object must have:
-                "image_description": (a brief label),
-                "options": [ {"alt": "...", "explanation": "..."}, {"alt": "...", "explanation": "..."} ]`;
+            const prompt = `Act as an accessibility specialist. Identify every significant image, chart, or photo on this PDF page. 
+                For each one, provide:
+                1. "box_2d": the bounding box in [ymin, xmin, ymax, xmax] format (normalized 0-1000).
+                2. "label": a short, descriptive name for the image.
+                3. "options": A list of 2 distinct alt-text variations (~125 chars each) and a brief explanation.
+                Return ONLY a JSON array of objects.`;
 
             const response = await fetch(apiUrl, {
                 method: 'POST',
@@ -179,8 +231,11 @@
             const data = await response.json();
             if (data.error) throw new Error(data.error.message);
 
-            const rawText = data.candidates[0].content.parts[0].text;
-            showPdfChoiceModal(JSON.parse(rawText), imgEl.src);
+            const aiResults = JSON.parse(data.candidates[0].content.parts[0].text);
+            const page = await currentPdf.getPage(pageNum);
+            const sanitizedResults = Array.isArray(aiResults) ? aiResults : [aiResults];
+
+            showCinemaModal(sanitizedResults, page);
 
         } catch (err) {
             console.error(err);
@@ -191,69 +246,77 @@
         }
     }
 
-    function showPdfChoiceModal(resultsArr, imgSrc) {
-        document.getElementById('polly-modal-overlay')?.remove();
-
-        const overlay = document.createElement('div');
-        overlay.id = 'polly-modal-overlay';
-        overlay.className = 'gemini-alt-modal-overlay';
-
-        const modal = document.createElement('div');
-        modal.className = 'gemini-modal-alert';
-        // Expanding the modal for a professional "Review Station" feel
-        modal.style.maxWidth = '1100px'; 
-        modal.style.width = '95%';
-        modal.style.maxHeight = '90vh';
-        modal.style.display = 'flex';
-        modal.style.flexDirection = 'column';
-        modal.style.padding = '0'; 
-        modal.style.overflow = 'hidden';
-
-        modal.innerHTML = `
-            <div style="background: #2271b1; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;">
-                <h2 style="margin: 0; font-size: 1.2em;">🦜 Polly's Review Station</h2>
-                <button onclick="document.getElementById('polly-modal-overlay').remove()" style="background: rgba(255,255,255,0.2); border: none; color: white; cursor: pointer; padding: 5px 10px; border-radius: 4px;">Close ✕</button>
+    // --- 4. CINEMA VIEW: High-Res Surgical Extraction ---
+    async function showCinemaModal(resultsArr, page) {
+        cinemaDialog.innerHTML = `
+            <div class="cinema-header">
+                <h2>🦜 Polly Cinema: Verify Image Descriptions</h2>
+                <button onclick="this.closest('dialog').close()" aria-label="Close">✕</button>
             </div>
-            <div style="display: flex; flex: 1; overflow: hidden;">
-                <div style="flex: 1; background: #525659; padding: 20px; overflow-y: auto; display: flex; justify-content: center;">
-                    <div style="position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.5); background: white;">
-                        <img src="${imgSrc}" style="max-width: 100%; display: block;">
-                    </div>
-                </div>
-                
-                <div style="flex: 1; background: white; padding: 25px; overflow-y: auto; border-left: 1px solid #ddd;">
-                    <p style="margin-top: 0; color: #666; font-style: italic;">Polly identified the following images on this page:</p>
-                    
-                    ${resultsArr.map((item, idx) => `
-                        <div style="margin-bottom: 40px; border: 1px solid #e5e5e5; border-radius: 8px; overflow: hidden;">
-                            <div style="background: #f8f9fa; padding: 10px 15px; border-bottom: 1px solid #e5e5e5; font-weight: bold; color: #2271b1;">
-                                Image ${idx + 1}: ${item.image_description}
-                            </div>
-                            <div style="padding: 15px;">
-                                ${item.options.map(opt => `
-                                    <div style="margin-bottom: 20px; background: #fff; border: 1px solid #eee; border-radius: 6px; padding: 12px; transition: 0.2s;" class="choice-card">
-                                        <div style="font-size: 11px; font-weight: bold; color: #999; margin-bottom: 8px;">ALT TEXT SUGGESTION</div>
-                                        <div style="font-size: 14px; line-height: 1.5; color: #333; margin-bottom: 12px;">${opt.alt}</div>
-                                        <div style="font-size: 12px; color: #666; background: #f1f6fb; padding: 8px; border-radius: 4px; border-left: 3px solid #2271b1;">
-                                            <strong>Strategy:</strong> ${opt.explanation}
-                                        </div>
-                                        <button class="gen-btn" style="width: 100%; margin-top: 12px; height: 36px; font-size: 13px;" 
-                                            onclick="navigator.clipboard.writeText('${opt.alt.replace(/'/g, "\\'")}'); this.textContent='✓ Copied to Clipboard!'; setTimeout(() => this.textContent='Copy Alt Text', 2000);">
-                                            Copy Alt Text
-                                        </button>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
+            <div class="cinema-body" id="cinema-body">
+                <p style="margin-top:0; color:#666;">Polly found ${resultsArr.length} potential images. Verify the descriptions against the cinema-quality previews.</p>
             </div>
         `;
 
-        overlay.appendChild(modal);
-        document.body.appendChild(overlay);
+        const body = cinemaDialog.querySelector('#cinema-body');
+
+        for (const item of resultsArr) {
+            const box = item.box_2d || [0,0,1000,1000];
+            const cropCanvas = await getHighResCrop(page, box);
+            const options = Array.isArray(item.options) ? item.options : (item.options ? [item.options] : []);
+
+            const row = document.createElement('div');
+            row.className = 'cinema-row';
+            row.innerHTML = `
+                <div class="cinema-preview">
+                    <img src="${cropCanvas.toDataURL('image/jpeg', 0.95)}" alt="Cinema view of ${item.label}">
+                </div>
+                <div class="cinema-controls">
+                    <h3>🔍 ${item.label || "Detected Image"}</h3>
+                    ${options.map(opt => `
+                        <div class="opt-card">
+                            <p class="alt-text">${opt.alt || "No text generated"}</p>
+                            ${opt.explanation ? `<p class="explanation"><strong>Strategy:</strong> ${opt.explanation}</p>` : ''}
+                            <button class="copy-btn" onclick="copyToClipboard(this, '${(opt.alt || "").replace(/'/g, "\\'")}');">Copy Alt Text</button>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            body.appendChild(row);
+        }
+
+        cinemaDialog.showModal();
     }
 
+    async function getHighResCrop(page, box) {
+        const scale = 4.0;
+        const viewport = page.getViewport({ scale });
+        const y0 = (box[0] / 1000) * viewport.height;
+        const x0 = (box[1] / 1000) * viewport.width;
+        const y1 = (box[2] / 1000) * viewport.height;
+        const x1 = (box[3] / 1000) * viewport.width;
+        const w = Math.max(1, x1 - x0);
+        const h = Math.max(1, y1 - y0);
+
+        const offscreen = document.createElement('canvas');
+        offscreen.width = viewport.width;
+        offscreen.height = viewport.height;
+        await page.render({ canvasContext: offscreen.getContext('2d'), viewport }).promise;
+
+        const crop = document.createElement('canvas');
+        crop.width = w;
+        crop.height = h;
+        crop.getContext('2d').drawImage(offscreen, x0, y0, w, h, 0, 0, w, h);
+        return crop;
+    }
+
+    function copyToClipboard(btn, text) {
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        const oldText = btn.textContent;
+        btn.textContent = '✓ Copied to Clipboard!';
+        setTimeout(() => btn.textContent = oldText, 2000);
+    }
 </script>
 </body>
 </html>
